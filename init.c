@@ -91,8 +91,14 @@ init_term(void)
     putenv("TERM=linux");
 }
 
+static void
+clear_str(char *str)
+{
+    if (str) while (*str) *str++ = 0;
+}
+
 int
-main(void)
+main(int argc, char *argv[])
 {
     if (getpid() != 1)
         return 1;
@@ -102,6 +108,9 @@ main(void)
     init_fs();
     init_console();
     init_term();
+
+    for (int i = 1; i < argc; i++)
+        clear_str(argv[i]);
 
     sigset_t set;
     sigfillset(&set);
