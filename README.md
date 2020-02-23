@@ -3,6 +3,12 @@ Minimal PID 1 for initramfs
 
 This is used for diskless servers with ONLY two states: running and upgrading.
 
+## Build & Install
+
+The binary must be installed as `/init` and nothing else.
+
+    $ make install DESTDIR=<PATH>
+
 ## Configuration
 
 Only two files are needed, for example:
