@@ -20,7 +20,7 @@ spawn(const char *cmd)
     }
 
     if (pid == (pid_t)0) {
-        static sigset_t set;
+        sigset_t set;
         sigfillset(&set);
         sigprocmask(SIG_UNBLOCK, &set, NULL);
         setsid();
@@ -103,7 +103,7 @@ main(void)
     init_console();
     init_term();
 
-    static sigset_t set;
+    sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, NULL);
 
