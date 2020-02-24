@@ -62,6 +62,8 @@ init_fs(void)
 
     if (mount("devpts", "/dev/pts", "devpts", 0, "gid=5,mode=0620,ptmxmode=0666"))
         perror("mount(devpts)");
+
+    symlink("/proc/mounts", "/etc/mtab");
 }
 
 static void
