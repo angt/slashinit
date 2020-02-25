@@ -1,13 +1,13 @@
 #define _GNU_SOURCE
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
 
 static void
 spawn(const char *cmd)
@@ -37,7 +37,7 @@ init_fs(void)
 {
     chdir("/");
 
-    if (mount(NULL, "/", NULL, MS_NOSUID|MS_REMOUNT, NULL))
+    if (mount(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL))
         perror("remount(/)");
 
     mkdir("/dev", 0755);
