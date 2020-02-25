@@ -64,6 +64,10 @@ init_fs(void)
         perror("mount(devpts)");
 
     symlink("/proc/mounts", "/etc/mtab");
+    symlink("/proc/self/fd", "/dev/fd");
+    symlink("/proc/self/fd/0", "/dev/stdin");
+    symlink("/proc/self/fd/1", "/dev/stdout");
+    symlink("/proc/self/fd/2", "/dev/stderr");
 }
 
 static void
