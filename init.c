@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include <sys/mount.h>
 #include <sys/stat.h>
@@ -29,7 +30,22 @@ spawn(const char *cmd)
         _exit(1);
     }
 
-    while (waitpid(-1, NULL, 0) != pid);
+    while (1) {
+        int status;
+        pid_t ret = waitpid(-1, &status, 0);
+
+        if (ret == (pid_t)-1) {
+            if (errno == EINTR)
+                continue;
+            perror("waitpid");
+            return;
+        }
+
+        if (ret == pid) {
+            if (WIFEXITED(status) || WIFSIGNALED(status))
+                return;
+        }
+    }
 }
 
 static void
