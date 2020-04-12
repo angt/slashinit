@@ -5,7 +5,7 @@ all: init
 
 .PHONY: install
 install: init
-	install -s init $(DESTDIR)/
+	cp init $(DESTDIR)/
 
 .PHONY: clean
 clean:
