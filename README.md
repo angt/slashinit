@@ -1,7 +1,9 @@
-# slashinit
+# /init
 Minimal PID 1 for initramfs
 
-This is used for diskless servers with ONLY two states: running and upgrading.
+This is used for diskless servers with only two stages: `/etc/boot` and `/etc/reboot`.
+
+If `/kernel` exists, /init will automatically kexec it after the reboot stage.
 
 ## Build & Install
 
@@ -27,4 +29,5 @@ and
 
     # your personal stuff..
 
+    # you can use kexec-tools for old kernels or unsupported arch.
     kexec -l /run/boot --reuse-cmdline && kexec -e
