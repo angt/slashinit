@@ -26,7 +26,8 @@ spawn(const char *cmd)
         sigprocmask(SIG_UNBLOCK, &set, NULL);
         setsid();
         execl(cmd, cmd, (char *)NULL);
-        perror("execl");
+        if (errno != ENOENT)
+            perror("execl");
         _exit(1);
     }
 
@@ -143,6 +144,4 @@ main(int argc, char *argv[])
         spawn("/etc/reboot");
         sleep(1);
     }
-
-    return 0;
 }
