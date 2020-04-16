@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include <asm-generic/setup.h>
@@ -15,8 +16,15 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
+enum si_lvl {
+    si_critical = 2,
+    si_error    = 3,
+    si_warning  = 4,
+    si_info     = 6,
+};
+
 static void
-error(const char *fmt, ...)
+si_log(enum si_lvl lvl, const char *fmt, ...)
 {
     va_list ap;
     char buf[256];
@@ -32,23 +40,25 @@ error(const char *fmt, ...)
     if (size > (size_t)ret)
         size = (size_t)ret;
 
-    int fd = open("/dev/kmsg", O_WRONLY);
+    char hdr[] = "<0>/init: ";
+    struct iovec iov[] = {
+        {hdr, sizeof(hdr) - 1},
+        {buf, size}, {"\n", 1},
+    };
 
-    if (fd < 0) {
-        write(2, buf, size);
-    } else {
-        write(fd, buf, size);
-        close(fd);
-    }
+    hdr[1] = '0' + (lvl & 7);
+    writev(2, iov, 3);
 }
 
 static void
-spawn(const char *cmd)
+si_spawn(const char *cmd)
 {
+    si_log(si_info, "Running %s", cmd);
+
     pid_t pid = fork();
 
     if (pid == (pid_t)-1) {
-        error("fork: %m\n");
+        si_log(si_critical, "fork: %m");
         return;
     }
 
@@ -61,7 +71,7 @@ spawn(const char *cmd)
         execl(cmd, cmd, (char *)NULL);
 
         if (errno != ENOENT)
-            error("execl(%s): %m\n", cmd);
+            si_log(si_critical, "execl(%s): %m", cmd);
 
         _exit(1);
     }
@@ -73,7 +83,7 @@ spawn(const char *cmd)
         if (ret == (pid_t)-1) {
             if (errno == EINTR)
                 continue;
-            error("waitpid: %m\n");
+            si_log(si_error, "waitpid: %m");
             return;
         }
 
@@ -85,27 +95,27 @@ spawn(const char *cmd)
 }
 
 static void
-mount_error(const char *src, const char *dst, const char *type,
-          unsigned long flags, const void *data)
+si_mount(const char *src, const char *dst, const char *type,
+         unsigned long flags, const void *data)
 {
     mkdir(dst, 0755);
 
     if (mount(src, dst, type, flags, data))
-        error("mount(%s): %m\n", dst);
+        si_log(si_critical, "mount(%s): %m", dst);
 }
 
 static void
-init_fs(void)
+si_init_fs(void)
 {
     chdir("/");
 
 #define MS_NOSE MS_NOSUID | MS_NOEXEC
-    mount_error(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL);
-    mount_error("none", "/proc", "proc", MS_NOSE | MS_NODEV, NULL);
-    mount_error("none", "/sys", "sysfs", MS_NOSE | MS_NODEV, NULL);
-    mount_error("none", "/sys/fs/cgroup", "cgroup2", MS_NOSE | MS_NODEV, NULL);
-    mount_error("none", "/dev", "devtmpfs", MS_NOSE | MS_STRICTATIME, NULL);
-    mount_error("devpts", "/dev/pts", "devpts", MS_NOSE, "gid=5,mode=0620");
+    si_mount(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL);
+    si_mount("none", "/proc", "proc", MS_NOSE | MS_NODEV, NULL);
+    si_mount("none", "/sys", "sysfs", MS_NOSE | MS_NODEV, NULL);
+    si_mount("none", "/sys/fs/cgroup", "cgroup2", MS_NOSE | MS_NODEV, NULL);
+    si_mount("none", "/dev", "devtmpfs", MS_NOSE | MS_STRICTATIME, NULL);
+    si_mount("devpts", "/dev/pts", "devpts", MS_NOSE, "gid=5,mode=0620");
 #undef MS_NOSE
 
     mkdir("/dev/shm", 01777);
@@ -119,25 +129,24 @@ init_fs(void)
 }
 
 static void
-init_console(const char *console)
+si_init_fd(const char *path, int *fds, int n)
 {
-    int fd = open(console, O_RDWR | O_NONBLOCK | O_NOCTTY);
+    int fd = open(path, O_RDWR | O_NONBLOCK | O_NOCTTY);
 
     if (fd < 0) {
-        error("open(%s): %m\n", console);
+        si_log(si_error, "open(%s): %m", path);
         return;
     }
 
-    dup2(fd, 0);
-    dup2(fd, 1);
-    dup2(fd, 2);
+    for (int k = 0; k < n; k++)
+        dup2(fd, fds[k]);
 
     if (fd > 2)
         close(fd);
 }
 
 static void
-init_term(void)
+si_init_term(void)
 {
     if (getenv("TERM"))
         return;
@@ -146,19 +155,19 @@ init_term(void)
 }
 
 static void
-clear_str(char *str)
+si_clear_str(char *str)
 {
     if (str) while (*str)
         *str++ = 0;
 }
 
 static int
-read_file(const char *file, char *buf, size_t size)
+si_read_file(const char *file, char *buf, size_t size)
 {
     int fd = open(file, O_RDONLY);
 
     if (fd < 0) {
-        error("open(%s): %m\n", file);
+        si_log(si_error, "open(%s): %m", file);
         return 1;
     }
 
@@ -168,7 +177,7 @@ read_file(const char *file, char *buf, size_t size)
     errno = tmp_errno;
 
     if (ret < 0) {
-        error("read(%s): %m\n", file);
+        si_log(si_error, "read(%s): %m", file);
         return 1;
     }
 
@@ -176,31 +185,35 @@ read_file(const char *file, char *buf, size_t size)
 }
 
 static void
-update(char *kernel)
+si_update(char *kernel)
 {
     char cmd[COMMAND_LINE_SIZE] = {0};
 
-    if (read_file("/proc/cmdline", cmd, sizeof(cmd) - 1))
+    if (si_read_file("/proc/cmdline", cmd, sizeof(cmd) - 1))
         return;
 
     int fd = open(kernel, O_RDONLY);
 
     if (fd < 0) {
         if (errno != ENOENT)
-            error("open(%s): %m\n", kernel);
+            si_log(si_error, "open(%s): %m", kernel);
         return;
     }
+
+    si_log(si_info, "Found %s, loading...", kernel);
 
     unsigned long flags = KEXEC_FILE_NO_INITRAMFS;
 
     if (syscall(SYS_kexec_file_load, fd, 0,
                 (unsigned long)sizeof(cmd), &cmd[0], flags)) {
-        error("kexec: %m\n");
+        si_log(si_error, "kexec: %m");
         return;
     }
 
+    si_log(si_info, "Rebooting...");
+
     if (reboot(RB_KEXEC)) {
-        error("reboot: %m\n");
+        si_log(si_error, "reboot: %m");
         return;
     }
 }
@@ -213,21 +226,22 @@ main(int argc, char *argv[])
 
     setsid();
 
-    init_fs();
-    init_console("/dev/console");
-    init_term();
+    si_init_fs();
+    si_init_fd("/dev/console", (int[]){0, 1, 2}, 3);
+    si_init_fd("/dev/kmsg", (int[]){2}, 1);
+    si_init_term();
 
     for (int i = 1; i < argc; i++)
-        clear_str(argv[i]);
+        si_clear_str(argv[i]);
 
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, NULL);
 
     while (1) {
-        spawn("/etc/boot");
-        spawn("/etc/reboot");
-        update("/kernel");
+        si_spawn("/etc/boot");
+        si_spawn("/etc/reboot");
+        si_update("/kernel");
         sleep(1);
     }
 }
