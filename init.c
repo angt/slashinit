@@ -129,7 +129,7 @@ si_init_fs(void)
 }
 
 static void
-si_init_fd(const char *path, int *fds, int n)
+si_init_fd(const char *path, int newfd)
 {
     int fd = open(path, O_RDWR | O_NONBLOCK | O_NOCTTY);
 
@@ -138,11 +138,11 @@ si_init_fd(const char *path, int *fds, int n)
         return;
     }
 
-    for (int k = 0; k < n; k++)
-        dup2(fd, fds[k]);
+    if (fd == newfd)
+        return;
 
-    if (fd > 2)
-        close(fd);
+    dup2(fd, newfd);
+    close(fd);
 }
 
 static void
@@ -227,9 +227,9 @@ main(int argc, char *argv[])
     setsid();
 
     si_init_fs();
-    si_init_fd("/dev/null", (int[]){0}, 1);
-    si_init_fd("/dev/console", (int[]){1, 2}, 2);
-    si_init_fd("/dev/kmsg", (int[]){2}, 1);
+    si_init_fd("/dev/null", 0);
+    si_init_fd("/dev/console", 1);
+    si_init_fd("/dev/kmsg", 2);
     si_init_term();
 
     for (int i = 1; i < argc; i++)
