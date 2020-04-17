@@ -227,7 +227,8 @@ main(int argc, char *argv[])
     setsid();
 
     si_init_fs();
-    si_init_fd("/dev/console", (int[]){0, 1, 2}, 3);
+    si_init_fd("/dev/null", (int[]){0}, 1);
+    si_init_fd("/dev/console", (int[]){1, 2}, 2);
     si_init_fd("/dev/kmsg", (int[]){2}, 1);
     si_init_term();
 
