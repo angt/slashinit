@@ -29,5 +29,5 @@ and
 
     # your personal stuff..
 
-    # you can use kexec-tools for old kernels or unsupported arch.
-    kexec -l /run/boot --reuse-cmdline && kexec -e
+    # you can still use kexec-tools for old kernels or unsupported arch.
+    kexec -l /kernel --reuse-cmdline && kexec -e
