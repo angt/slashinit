@@ -76,3 +76,7 @@ A minimum kernel configuration would look like this:
     CONFIG_TTY=y
     CONFIG_SERIAL_8250=y
     CONFIG_SERIAL_8250_CONSOLE=y
+
+---
+For feature requests and bug reports,
+please create an [issue](https://github.com/angt/slashinit/issues).
