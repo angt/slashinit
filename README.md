@@ -40,6 +40,20 @@ and
     # you can still use kexec-tools for old kernels or unsupported arch.
     kexec -l /kernel --reuse-cmdline && kexec -e
 
+## File system
+
+`/init` will create a minimal file system that should look like this if all goes well:
+
+    # cat /proc/mounts
+    none / rootfs rw,nosuid 0 0
+    none /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+    none /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+    none /sys/fs/cgroup cgroup2 rw,nosuid,nodev,noexec,relatime 0 0
+    none /dev devtmpfs rw,nosuid,noexec 0 0
+    devpts /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000 0 0
+
+Note that `/init` mounts `cgroup2` as `/sys/fs/cgroup` and not the old `cgroup`.
+
 ## Kernel configuration
 
 A minimum kernel configuration would look like this:
