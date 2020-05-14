@@ -56,21 +56,28 @@ Note that `/init` mounts `cgroup2` as `/sys/fs/cgroup` and not the old `cgroup`.
 
 ## Kernel configuration
 
-A minimum kernel configuration would look like this:
+A minimal kernel configuration to enable all features of `/init` would look like this:
 
     CONFIG_BLK_DEV_INITRD=y
-    CONFIG_INITRAMFS_SOURCE="$PWD/root"
+    CONFIG_INITRAMFS_SOURCE=<PATH>  # root directory with <PATH>/init
     CONFIG_BINFMT_ELF=y
     CONFIG_BINFMT_SCRIPT=y
     CONFIG_DEVTMPFS=y
     CONFIG_PROC_FS=y
     CONFIG_SYSFS=y
+
+Since all logs go into the kernel, it's a good idea to increase the size of the log buffer:
+
     CONFIG_LOG_BUF_SHIFT=24
+
+Required for updates:
 
     CONFIG_RELOCATABLE=y
     CONFIG_CRYPTO=y
     CONFIG_CRYPTO_SHA256=y
     CONFIG_KEXEC_FILE=y
+
+Not mandatory but useful to see what's going on :)
 
     CONFIG_PRINTK=y
     CONFIG_TTY=y
