@@ -1,12 +1,14 @@
-DESTDIR ?=
+CC     = cc
+CFLAGS = -Wall -O2
 
-.PHONY: all
-all: init
+init:
+	$(CC) $(CFLAGS) $(CPPFLAGS) init.c -o init
 
-.PHONY: install
 install: init
-	cp init $(DESTDIR)/
+	mkdir -p $(DESTDIR)
+	mv -f init $(DESTDIR)/
 
-.PHONY: clean
 clean:
 	rm -f init
+
+.PHONY: init install clean
