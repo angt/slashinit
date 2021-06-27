@@ -27,8 +27,9 @@ static void
 si_log(enum si_lvl lvl, const char *fmt, ...)
 {
     va_list ap;
-    char buf[256];
-    size_t size = sizeof(buf);
+    char tmp[256] = "<*>/init: ";
+    char *buf = &tmp[10];
+    size_t size = sizeof(tmp) - 10;
 
     va_start(ap, fmt);
     int ret = vsnprintf(buf, size, fmt, ap);
@@ -40,14 +41,8 @@ si_log(enum si_lvl lvl, const char *fmt, ...)
     if (size > (size_t)ret)
         size = (size_t)ret;
 
-    char hdr[] = "<0>/init: ";
-    struct iovec iov[] = {
-        {hdr, sizeof(hdr) - 1},
-        {buf, size}, {"\n", 1},
-    };
-
-    hdr[1] = '0' + (lvl & 7);
-    writev(2, iov, 3);
+    tmp[1] = '0' + (lvl & 7);
+    write(2, tmp, size + 10);
 }
 
 static void
@@ -61,7 +56,6 @@ si_spawn(const char *cmd)
         si_log(si_critical, "fork: %m");
         return;
     }
-
     if (pid == (pid_t)0) {
         sigset_t set;
         sigfillset(&set);
@@ -75,7 +69,6 @@ si_spawn(const char *cmd)
 
         _exit(1);
     }
-
     while (1) {
         int status;
         pid_t ret = waitpid(-1, &status, 0);
@@ -86,7 +79,6 @@ si_spawn(const char *cmd)
             si_log(si_error, "waitpid: %m");
             return;
         }
-
         if (ret == pid) {
             if (WIFEXITED(status) || WIFSIGNALED(status))
                 return;
@@ -137,7 +129,6 @@ si_init_fd(const char *path, int newfd)
         si_log(si_error, "open(%s): %m", path);
         return;
     }
-
     if (fd == newfd)
         return;
 
@@ -170,7 +161,6 @@ si_read_file(const char *file, char *buf, size_t size)
         si_log(si_error, "open(%s): %m", file);
         return 1;
     }
-
     ssize_t ret = read(fd, buf, size);
     int tmp_errno = errno;
     close(fd);
@@ -180,7 +170,6 @@ si_read_file(const char *file, char *buf, size_t size)
         si_log(si_error, "read(%s): %m", file);
         return 1;
     }
-
     return 0;
 }
 
@@ -199,7 +188,6 @@ si_update(char *kernel)
             si_log(si_error, "open(%s): %m", kernel);
         return;
     }
-
     si_log(si_info, "Found %s, loading...", kernel);
 
     unsigned long flags = KEXEC_FILE_NO_INITRAMFS;
@@ -209,7 +197,6 @@ si_update(char *kernel)
         si_log(si_error, "kexec: %m");
         return;
     }
-
     si_log(si_info, "Rebooting...");
 
     if (reboot(RB_KEXEC)) {
