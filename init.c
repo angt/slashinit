@@ -195,8 +195,10 @@ si_update(char *kernel)
     if (syscall(SYS_kexec_file_load, fd, 0,
                 (unsigned long)sizeof(cmd), &cmd[0], flags)) {
         si_log(si_error, "kexec: %m");
+        close(fd);
         return;
     }
+    close(fd);
     si_log(si_info, "Rebooting...");
 
     if (reboot(RB_KEXEC)) {
