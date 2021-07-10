@@ -42,7 +42,7 @@ si_log(enum si_lvl lvl, const char *fmt, ...)
         size = (size_t)ret;
 
     tmp[1] = '0' + (lvl & 7);
-    write(2, tmp, size + 10);
+    (void)!write(2, tmp, size + 10);
 }
 
 static void
@@ -99,7 +99,7 @@ si_mount(const char *src, const char *dst, const char *type,
 static void
 si_init_fs(void)
 {
-    chdir("/");
+    (void)!chdir("/");
 
 #define MS_NOSE MS_NOSUID | MS_NOEXEC
     si_mount(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL);
@@ -113,11 +113,11 @@ si_init_fs(void)
     mkdir("/dev/shm", 01777);
     mkdir("/tmp", 01777);
 
-    symlink("/proc/mounts", "/etc/mtab");
-    symlink("/proc/self/fd", "/dev/fd");
-    symlink("/proc/self/fd/0", "/dev/stdin");
-    symlink("/proc/self/fd/1", "/dev/stdout");
-    symlink("/proc/self/fd/2", "/dev/stderr");
+    (void)!symlink("/proc/mounts", "/etc/mtab");
+    (void)!symlink("/proc/self/fd", "/dev/fd");
+    (void)!symlink("/proc/self/fd/0", "/dev/stdin");
+    (void)!symlink("/proc/self/fd/1", "/dev/stdout");
+    (void)!symlink("/proc/self/fd/2", "/dev/stderr");
 }
 
 static void
