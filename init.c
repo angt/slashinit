@@ -199,6 +199,13 @@ si_update(char *kernel)
         return;
     }
     close(fd);
+
+    si_log(si_info, "Syncing...");
+    sync();
+
+    si_log(si_info, "Killing all processes...");
+    kill(-1, SIGKILL);
+
     si_log(si_info, "Rebooting...");
 
     if (reboot(RB_KEXEC)) {
