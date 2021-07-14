@@ -174,6 +174,21 @@ si_read_file(const char *file, char *buf, size_t size)
 }
 
 static void
+si_reboot(int cmd)
+{
+    si_log(si_info, "Syncing...");
+    sync();
+
+    si_log(si_info, "Killing all processes...");
+    kill(-1, SIGKILL);
+
+    si_log(si_info, "Rebooting...");
+
+    if (reboot(cmd))
+        si_log(si_error, "reboot: %m");
+}
+
+static void
 si_update(char *kernel)
 {
     char cmd[COMMAND_LINE_SIZE] = {0};
@@ -200,18 +215,7 @@ si_update(char *kernel)
     }
     close(fd);
 
-    si_log(si_info, "Syncing...");
-    sync();
-
-    si_log(si_info, "Killing all processes...");
-    kill(-1, SIGKILL);
-
-    si_log(si_info, "Rebooting...");
-
-    if (reboot(RB_KEXEC)) {
-        si_log(si_error, "reboot: %m");
-        return;
-    }
+    si_reboot(RB_KEXEC);
 }
 
 int
@@ -239,6 +243,8 @@ main(int argc, char *argv[])
         si_spawn("/etc/boot");
         si_spawn("/etc/reboot");
         si_update("/kernel");
+        if (!access("/reboot", F_OK))
+            si_reboot(RB_AUTOBOOT);
         sleep(1);
     }
 }
