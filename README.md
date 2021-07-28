@@ -14,10 +14,22 @@ The binary must be installed as `/init` and nothing else.
 
     $ make install DESTDIR=<PATH>
 
-## Update
+## Update & reboot
 
 When your system is running with `/init` you don't need any extra tool to do an update.
 Just put the new kernel at `/kernel` and `/init` will automatically kexec it after the `/etc/reboot` stage.
+
+If you want to update your system in the usual way (pxe, efi,...) you need a cold reboot:
+
+    $ touch /reboot
+    $ reboot
+
+With `reboot` a script that stops your supervisor. For example with `runit`:
+
+    $ cat /bin/reboot
+    #!/bin/sh
+
+    exec pkill -HUP runsvdir
 
 ## Configuration
 
