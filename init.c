@@ -152,15 +152,14 @@ si_clear_str(char *str)
         *str++ = 0;
 }
 
-static int
+static ssize_t
 si_read_file(const char *file, char *buf, size_t size)
 {
     int fd = open(file, O_RDONLY);
 
-    if (fd < 0) {
-        si_log(si_error, "open(%s): %m", file);
-        return 1;
-    }
+    if (fd < 0)
+        return 0;
+
     ssize_t ret = read(fd, buf, size);
     int tmp_errno = errno;
     close(fd);
@@ -168,9 +167,9 @@ si_read_file(const char *file, char *buf, size_t size)
 
     if (ret < 0) {
         si_log(si_error, "read(%s): %m", file);
-        return 1;
+        return -1;
     }
-    return 0;
+    return ret;
 }
 
 static void
@@ -193,7 +192,9 @@ si_update(char *kernel)
 {
     char cmd[COMMAND_LINE_SIZE] = {0};
 
-    if (si_read_file("/proc/cmdline", cmd, sizeof(cmd) - 1))
+    ssize_t len = si_read_file("/kernel.cmdline", cmd, sizeof(cmd) - 1);
+
+    if (len < 0)
         return;
 
     int fd = open(kernel, O_RDONLY);
@@ -207,8 +208,7 @@ si_update(char *kernel)
 
     unsigned long flags = KEXEC_FILE_NO_INITRAMFS;
 
-    if (syscall(SYS_kexec_file_load, fd, 0,
-                (unsigned long)sizeof(cmd), &cmd[0], flags)) {
+    if (syscall(SYS_kexec_file_load, fd, -1, (unsigned long)len + 1, &cmd[0], flags)) {
         si_log(si_error, "kexec: %m");
         close(fd);
         return;
