@@ -118,6 +118,8 @@ si_init_fs(void)
     (void)!symlink("/proc/self/fd/0", "/dev/stdin");
     (void)!symlink("/proc/self/fd/1", "/dev/stdout");
     (void)!symlink("/proc/self/fd/2", "/dev/stderr");
+
+    unlink("/init");
 }
 
 static void
