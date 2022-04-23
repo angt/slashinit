@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <spawn.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +16,8 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
+
+char **environ;
 
 enum si_lvl {
     si_critical = 2,
@@ -46,28 +49,23 @@ si_log(enum si_lvl lvl, const char *fmt, ...)
 }
 
 static void
-si_spawn(const char *cmd)
+si_spawn(char *argv[], sigset_t *sig)
 {
-    si_log(si_info, "Running %s", cmd);
+    si_log(si_info, "Running %s", argv[0]);
 
-    pid_t pid = fork();
+    posix_spawnattr_t attr;
+    posix_spawnattr_init(&attr);
+    posix_spawnattr_setsigmask(&attr, sig);
+    posix_spawnattr_setflags(&attr,
+            POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
 
-    if (pid == (pid_t)-1) {
-        si_log(si_critical, "fork: %m");
+    pid_t pid;
+    int err = posix_spawn(&pid, argv[0], 0, &attr, argv, environ);
+    posix_spawnattr_destroy(&attr);
+
+    if (err) {
+        si_log(si_error, "Failed to run %s", argv[0]);
         return;
-    }
-    if (pid == (pid_t)0) {
-        sigset_t set;
-        sigfillset(&set);
-        sigprocmask(SIG_UNBLOCK, &set, NULL);
-
-        setsid();
-        execl(cmd, cmd, (char *)NULL);
-
-        if (errno != ENOENT)
-            si_log(si_critical, "execl(%s): %m", cmd);
-
-        _exit(1);
     }
     while (1) {
         int status;
@@ -229,8 +227,6 @@ main(int argc, char *argv[])
     if (getpid() != 1)
         return 1;
 
-    setsid();
-
     si_init_fs();
     si_init_fd("/dev/null", 0);
     si_init_fd("/dev/console", 1);
@@ -240,13 +236,13 @@ main(int argc, char *argv[])
     for (int i = 1; i < argc; i++)
         si_clear_str(argv[i]);
 
-    sigset_t set;
+    sigset_t set, old;
     sigfillset(&set);
-    sigprocmask(SIG_BLOCK, &set, NULL);
+    sigprocmask(SIG_BLOCK, &set, &old);
 
     while (1) {
-        si_spawn("/etc/boot");
-        si_spawn("/etc/reboot");
+        si_spawn((char*[]){"/etc/boot",0}, &old);
+        si_spawn((char*[]){"/etc/reboot",0}, &old);
         si_update("/kernel");
         if (!access("/reboot", F_OK))
             si_reboot(RB_AUTOBOOT);
