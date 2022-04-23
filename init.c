@@ -8,8 +8,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include <asm-generic/setup.h>
-#include <linux/kexec.h>
 #include <sys/mount.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
@@ -192,7 +190,7 @@ si_reboot(int cmd)
 static void
 si_update(char *kernel)
 {
-    char cmd[COMMAND_LINE_SIZE] = {0};
+    char cmd[4<<10] = {0};
 
     ssize_t len = si_read_file("/kernel.cmdline", cmd, sizeof(cmd) - 1);
 
@@ -206,9 +204,10 @@ si_update(char *kernel)
             si_log(si_error, "open(%s): %m", kernel);
         return;
     }
+#ifdef SYS_kexec_file_load
     si_log(si_info, "Found %s, loading...", kernel);
 
-    unsigned long flags = KEXEC_FILE_NO_INITRAMFS;
+    unsigned long flags = 0x4; // KEXEC_FILE_NO_INITRAMFS
 
     if (syscall(SYS_kexec_file_load, fd, -1, (unsigned long)len + 1, &cmd[0], flags)) {
         si_log(si_error, "kexec: %m");
@@ -216,8 +215,11 @@ si_update(char *kernel)
         return;
     }
     close(fd);
-
     si_reboot(RB_KEXEC);
+#else
+    close(fd);
+    si_log(si_error, "Found %s, but kexec is not supported...", kernel);
+#endif
 }
 
 int
