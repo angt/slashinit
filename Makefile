@@ -2,7 +2,7 @@ CC     = cc
 CFLAGS = -Wall -O2
 
 init:
-	$(CC) $(CFLAGS) $(CPPFLAGS) init.c -o init
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) init.c -o init
 
 install: init
 	mkdir -p $(DESTDIR)
