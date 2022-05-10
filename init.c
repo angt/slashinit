@@ -183,7 +183,7 @@ si_reboot(int cmd)
 
     si_log(si_info, "Rebooting...");
 
-    if (reboot(cmd))
+    if (cmd && reboot(cmd))
         si_log(si_error, "reboot: %m");
 }
 
@@ -244,8 +244,7 @@ main(int argc, char *argv[])
         si_spawn((char*[]){"/etc/boot",0}, &old);
         si_spawn((char*[]){"/etc/reboot",0}, &old);
         si_update("/kernel");
-        if (!access("/reboot", F_OK))
-            si_reboot(RB_AUTOBOOT);
+        si_reboot(access("/reboot", F_OK) ? 0 : RB_AUTOBOOT);
         sleep(1);
     }
 }
