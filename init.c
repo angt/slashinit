@@ -85,29 +85,39 @@ si_spawn(char *argv[], sigset_t *sig)
 }
 
 static void
-si_mount(const char *src, const char *dst, const char *type,
-         unsigned long flags, const void *data)
-{
-    mkdir(dst, 0755);
-
-    if (mount(src, dst, type, flags, data))
-        si_log(si_critical, "mount(%s): %m", dst);
-}
-
-static void
 si_init_fs(void)
 {
     (void)!chdir("/");
 
+    struct {
+        const char *src;
+        const char *dst;
+        const char *type;
+        unsigned long flags;
+        const char *data;
+        int ret, err;
+    } m[] = {
 #define MS_NOSE MS_NOSUID | MS_NOEXEC
-    si_mount(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL);
-    si_mount("none", "/proc", "proc", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/sys", "sysfs", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/sys/fs/cgroup", "cgroup2", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/dev", "devtmpfs", MS_NOSE | MS_STRICTATIME, NULL);
-    si_mount("devpts", "/dev/pts", "devpts", MS_NOSE, "gid=5,mode=0620");
+        {NULL,     "/",              NULL,       MS_NOSUID | MS_REMOUNT,     NULL},
+        {"none",   "/proc",          "proc",     MS_NOSE   | MS_NODEV,       NULL},
+        {"none",   "/sys",           "sysfs",    MS_NOSE   | MS_NODEV,       NULL},
+        {"none",   "/sys/fs/cgroup", "cgroup2",  MS_NOSE   | MS_NODEV,       NULL},
+        {"none",   "/dev",           "devtmpfs", MS_NOSE   | MS_STRICTATIME, NULL},
+        {"devpts", "/dev/pts",       "devpts",   MS_NOSE,       "gid=5,mode=0620"},
+        {},
 #undef MS_NOSE
-
+    };
+    for (int i = 0; m[i].dst; i++) {
+        mkdir(m[i].dst, 0755);
+        m[i].ret = mount(m[i].src, m[i].dst, m[i].type, m[i].flags, m[i].data);
+        m[i].err = errno;
+    }
+    for (int i = 0; m[i].dst; i++) {
+        if (m[i].ret == -1) {
+            errno = m[i].err;
+            si_log(si_warning, "mount(%s): %m", m[i].dst);
+        }
+    }
     mkdir("/dev/shm", 01777);
     mkdir("/tmp", 01777);
 
