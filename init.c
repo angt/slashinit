@@ -90,7 +90,8 @@ si_mount(const char *src, const char *dst, const char *type,
 {
     mkdir(dst, 0755);
 
-    if (mount(src, dst, type, flags, data))
+    if (mount(src, dst, type, flags, data) == -1 &&
+            errno != ENODEV && errno != ENOENT)
         si_log(si_critical, "mount(%s): %m", dst);
 }
 
