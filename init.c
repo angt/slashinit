@@ -17,6 +17,9 @@
 #include <sys/syscall.h>
 #include <sys/wait.h>
 
+#define SI_BASE     (MS_NOSUID | MS_NOEXEC)
+#define SI_COUNT(x) (sizeof(x) / sizeof(x[0]))
+
 char **__environ;
 
 enum si_lvl {
@@ -84,71 +87,41 @@ si_spawn(char *argv[], sigset_t *sig)
     }
 }
 
-static void
+static int
 si_mount(const char *src, const char *dst, const char *type,
          unsigned long flags, const void *data)
 {
     mkdir(dst, 0755);
 
     if (mount(src, dst, type, flags, data))
-        si_log(si_critical, "mount(%s): %m", dst);
+        return errno;
+
+    return 0;
 }
 
-static void
-si_init_fs(void)
-{
-    (void)!chdir("/");
-
-#define MS_NOSE MS_NOSUID | MS_NOEXEC
-    si_mount(NULL, "/", NULL, MS_NOSUID | MS_REMOUNT, NULL);
-    si_mount("none", "/proc", "proc", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/sys", "sysfs", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/sys/fs/cgroup", "cgroup2", MS_NOSE | MS_NODEV, NULL);
-    si_mount("none", "/dev", "devtmpfs", MS_NOSE | MS_STRICTATIME, NULL);
-    si_mount("devpts", "/dev/pts", "devpts", MS_NOSE, "gid=5,mode=0620");
-#undef MS_NOSE
-
-    mkdir("/dev/shm", 01777);
-    mkdir("/tmp", 01777);
-
-    (void)!symlink("/proc/mounts", "/etc/mtab");
-    (void)!symlink("/proc/self/fd", "/dev/fd");
-    (void)!symlink("/proc/self/fd/0", "/dev/stdin");
-    (void)!symlink("/proc/self/fd/1", "/dev/stdout");
-    (void)!symlink("/proc/self/fd/2", "/dev/stderr");
-
-    unlink("/init");
-}
-
-static void
-si_init_fd(const char *path, int newfd)
+static int
+si_path_to_fd(const char *path, int newfd)
 {
     int fd = open(path, O_RDWR | O_NONBLOCK | O_NOCTTY);
 
-    if (fd < 0) {
-        si_log(si_error, "open(%s): %m", path);
-        return;
-    }
+    if (fd < 0)
+        return errno;
+
     if (fd == newfd)
-        return;
+        return 0;
 
     dup2(fd, newfd);
     close(fd);
-}
-
-static void
-si_init_term(void)
-{
-    if (getenv("TERM"))
-        return;
-
-    putenv("TERM=linux");
+    return 0;
 }
 
 static void
 si_clear_str(char *str)
 {
-    if (str) while (*str)
+    if (!str)
+        return;
+
+    while (*str)
         *str++ = 0;
 }
 
@@ -227,15 +200,64 @@ main(int argc, char *argv[])
     if (getpid() != 1)
         return 1;
 
-    si_init_fs();
-    si_init_fd("/dev/null", 0);
-    si_init_fd("/dev/console", 1);
-    si_init_fd("/dev/kmsg", 2);
-    si_init_term();
+    (void)!chdir("/");
+
+    if (!getenv("TERM"))
+        putenv("TERM=linux");
 
     for (int i = 1; i < argc; i++)
         si_clear_str(argv[i]);
 
+    struct {
+        const char *src;
+        const char *dst;
+        const char *type;
+        unsigned long flags;
+        const char *data;
+        int err;
+    } m[] = {
+        {NULL,     "/",              NULL,       MS_NOSUID | MS_REMOUNT,   },
+        {"none",   "/proc",          "proc",     SI_BASE   | MS_NODEV,     },
+        {"none",   "/dev",           "devtmpfs", SI_BASE   | MS_STRICTATIME},
+        {"none",   "/sys",           "sysfs",    SI_BASE   | MS_NODEV,     },
+        {"none",   "/sys/fs/cgroup", "cgroup2",  SI_BASE   | MS_NODEV,     },
+        {"devpts", "/dev/pts",       "devpts",   SI_BASE, "gid=5,mode=0620"},
+    };
+    for (int i = 0; i < SI_COUNT(m); i++)
+        m[i].err = si_mount(m[i].src, m[i].dst, m[i].type, m[i].flags, m[i].data);
+
+    struct {
+        const char *path;
+        int newfd;
+        int err;
+    } p[] = {
+        {"/dev/null",    0},
+        {"/dev/console", 1},
+        {"/dev/kmsg",    2},
+    };
+    for (int i = 0; i < SI_COUNT(p); i++)
+        p[i].err = si_path_to_fd(p[i].path, p[i].newfd);
+
+    (void)!symlink("/proc/mounts", "/etc/mtab");
+    (void)!symlink("/proc/self/fd", "/dev/fd");
+    (void)!symlink("/proc/self/fd/0", "/dev/stdin");
+    (void)!symlink("/proc/self/fd/1", "/dev/stdout");
+    (void)!symlink("/proc/self/fd/2", "/dev/stderr");
+
+    mkdir("/dev/shm", 01777);
+    mkdir("/tmp", 01777);
+    unlink("/init");
+
+    // All the hard work is done, we can now try to log
+
+    for (int i = 0; i < SI_COUNT(m); i++) if (m[i].err) {
+        errno = m[i].err;
+        si_log(si_warning, "mount(%s): %m", m[i].dst);
+    }
+    for (int i = 0; i < SI_COUNT(p); i++) if (p[i].err) {
+        errno = p[i].err;
+        si_log(si_warning, "open(%s): %m", p[i].path);
+    }
     sigset_t set, old;
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, &old);
